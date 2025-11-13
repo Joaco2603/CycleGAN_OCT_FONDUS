@@ -61,6 +61,8 @@ cache/
 tmp/
 temp/
 
+*.pyc
+
 .github
 
 # Model files and large binaries
