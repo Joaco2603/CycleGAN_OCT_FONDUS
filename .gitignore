@@ -1,0 +1,97 @@
+# -----------------------------------------------------------------------------
+# Project: OCT CycleGAN (Fundus ↔ OCT)
+# Purpose: Ignore artifacts, datasets, environment files, and local tooling.
+# Keep: source code in src/, configs (e.g., config.yaml), docs/, and scripts/.
+# -----------------------------------------------------------------------------
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# Virtual environments and Python env metadata
+.venv/
+venv/
+env/
+ENV/
+.conda/
+pip-wheel-metadata/
+
+# Packaging/build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and training artifacts
+logs/
+generated/
+weights/
+checkpoints/
+runs/
+lightning_logs/
+
+# TensorBoard event files
+events.out.tfevents.*
+tensorboard-*
+
+# Datasets (raw and split)
+data/
+dataset/
+datasets/
+.cache/
+cache/
+tmp/
+temp/
+
+.github
+
+# Model files and large binaries
+*.pth
+*.pt
+*.ckpt
+*.onnx
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Coverage / test outputs
+.coverage
+coverage.xml
+htmlcov/
+
+# Windows shell history/backups
+*.bak
+*.tmp
+
+# Node tooling (if any incidental UI experiments)
+node_modules/
+package-lock.json
+
+# Keep key project files explicitly (documentation/reference)
+!README.md
+!requirements.txt
+!config.yaml
+!docs/**
+!scripts/**
+!src/**
+!.github/**
