@@ -29,6 +29,12 @@ Modular CycleGAN pipeline for unsupervised translation between retinal fundus ph
 5. Generate samples:
    ```powershell
    python generate.py weights/cycle_gan_epoch_200.pth samples/fundus/*.png --direction fundus_to_oct
+
+   # Fundus -> OCT (adjust the path of the image if you want another one)
+   python generate.py "weights/cycle_gan_epoch_010.pth" "dataset/fundus/val/EYE FUNDUS1/0002_OD_f_1.jpg" --config config.yaml --direction fundus_to_oct --output "generated/quick_demo"
+
+   # OCT -> Fundus
+   python generate.py "weights/cycle_gan_epoch_010.pth" "dataset/oct/val/OCT1/1221_OD_o_2.jpg" --config config.yaml --direction oct_to_fundus --output "generated/quick_demo"
    ```
 
 ## Layout
