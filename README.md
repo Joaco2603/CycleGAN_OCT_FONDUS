@@ -37,6 +37,28 @@ Modular CycleGAN pipeline for unsupervised translation between retinal fundus ph
    python generate.py "weights/cycle_gan_epoch_010.pth" "dataset/oct/val/OCT1/1221_OD_o_2.jpg" --config config.yaml --direction oct_to_fundus --output "generated/quick_demo"
    ```
 
+# 1. Crear estructura de carpetas
+New-Item -ItemType Directory -Force -Path "dataset/fundus/train", "dataset/fundus/val", "dataset/fundus/test"
+New-Item -ItemType Directory -Force -Path "dataset/oct/train", "dataset/oct/val", "dataset/oct/test"
+
+# 2. Copiar imágenes originales
+Copy-Item -Recurse "data/EYE FUNDUS/*" -Destination "dataset/fundus/train/"
+Copy-Item -Recurse "data/OCT/*" -Destination "dataset/oct/train/"
+
+# 3. Verificar cantidad
+(Get-ChildItem -Recurse "dataset/fundus/train" -Filter "*.jpg").Count
+(Get-ChildItem -Recurse "dataset/oct/train" -Filter "*.jpg").Count
+
+# 4. Filtrar fundus (dry-run primero)
+python scripts/filter_quality.py --root dataset/fundus/train --domain fundus --dry-run
+
+# 5. Filtrar OCT (dry-run primero)
+python scripts/filter_quality.py --root dataset/oct/train --domain oct --dry-run
+
+# 6. Aplicar filtro (mover a cuarentena)
+python scripts/filter_quality.py --root dataset/fundus/train --domain fundus --quarantine
+python scripts/filter_quality.py --root dataset/oct/train --domain oct --quarantine
+
 ## Layout
 
 - `data/` — unpaired Fundus/OCT images organised by split.

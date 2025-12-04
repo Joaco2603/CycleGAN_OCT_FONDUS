@@ -6,6 +6,9 @@ paths:
 data:
   image_size: 256
   augment: true
+  preprocessing: standard  # Options: minimal, standard, aggressive, medical, contrast, domain_specific
+  quality_filter: true     # Filter out low-quality images before training
+  quality_strict: true    # Use stricter quality thresholds
   num_workers: 2
   fundus:
     root: dataset/fundus
@@ -31,7 +34,7 @@ optim:
   batch_size: 4
 
 training:
-  epochs: 12
+  epochs: 24
   decay_start: 100
   amp: true
   sample_interval: 100

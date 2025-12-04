@@ -20,6 +20,9 @@ class DataConfig:
     oct: DomainPaths
     image_size: int
     augment: bool
+    preprocessing: str
+    quality_filter: bool
+    quality_strict: bool
     num_workers: int
 
 
@@ -78,6 +81,9 @@ def load_config(path: Path | str) -> TrainingConfig:
         oct=_parse_domain(raw["data"]["oct"], base),
         image_size=raw["data"]["image_size"],
         augment=raw["data"].get("augment", True),
+        preprocessing=raw["data"].get("preprocessing", "standard"),
+        quality_filter=raw["data"].get("quality_filter", False),
+        quality_strict=raw["data"].get("quality_strict", False),
         num_workers=raw["data"].get("num_workers", 2),
     )
     optim = OptimConfig(

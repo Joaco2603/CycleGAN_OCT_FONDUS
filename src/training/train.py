@@ -9,7 +9,7 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
-from ..data import build_dataloader, build_transforms
+from ..data import build_dataloader, build_transforms, CompositeFilter
 from ..losses import adversarial_loss, cycle_consistency_loss, identity_loss
 from ..models import CycleGAN
 from ..utils.config import TrainingConfig
@@ -37,7 +37,25 @@ def train(config: TrainingConfig) -> None:
     config.paths.logs.mkdir(parents=True, exist_ok=True)
     config.paths.weights.mkdir(parents=True, exist_ok=True)
     config.paths.generated.mkdir(parents=True, exist_ok=True)
-    transforms_train = build_transforms(config.data.image_size, train=True, augment=config.data.augment)
+    transforms_train = build_transforms(
+        config.data.image_size,
+        train=True,
+        augment=config.data.augment,
+        preset=config.data.preprocessing,
+    )
+
+    # Setup quality filters if enabled
+    qf_fundus = None
+    qf_oct = None
+    if config.data.quality_filter:
+        print("   🔍 Quality filter: enabled")
+        if config.data.quality_strict:
+            qf_fundus = CompositeFilter.strict_fundus()
+            print("      Fundus: strict mode")
+        else:
+            qf_fundus = CompositeFilter.default_fundus()
+        qf_oct = CompositeFilter.default_oct()
+
     loader = build_dataloader(
         config.data.fundus.train,
         config.data.oct.train,
@@ -46,6 +64,8 @@ def train(config: TrainingConfig) -> None:
         shuffle=True,
         num_workers=config.data.num_workers,
         pin_memory=device.type == "cuda",
+        quality_filter_fundus=qf_fundus,
+        quality_filter_oct=qf_oct,
     )
     model = CycleGAN(blocks=config.model.blocks).to(device)
     for module in model.generators() + model.discriminators():

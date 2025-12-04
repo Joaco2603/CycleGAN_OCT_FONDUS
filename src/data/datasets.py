@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -10,11 +10,39 @@ from torch.utils.data import DataLoader, Dataset
 Image.MAX_IMAGE_PIXELS = None
 
 
-def _gather_images(root: Path) -> List[Path]:
+def _gather_images(
+    root: Path,
+    quality_filter: Optional["CompositeFilter"] = None,
+) -> Tuple[List[Path], int]:
+    """
+    Gather images from directory, optionally filtering by quality.
+
+    Returns:
+        (valid_paths, num_rejected)
+    """
     paths = sorted(p for p in root.rglob("*") if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".tif"})
     if not paths:
         raise FileNotFoundError(f"No images under {root}")
-    return paths
+
+    if quality_filter is None:
+        return paths, 0
+
+    valid = []
+    rejected = 0
+    for p in paths:
+        try:
+            img = Image.open(p).convert("RGB")
+            if quality_filter.check(img).passed:
+                valid.append(p)
+            else:
+                rejected += 1
+        except Exception:
+            rejected += 1
+
+    if not valid:
+        raise FileNotFoundError(f"All {len(paths)} images rejected by quality filter in {root}")
+
+    return valid, rejected
 
 
 class CycleGANDataset(Dataset):
@@ -24,11 +52,17 @@ class CycleGANDataset(Dataset):
         oct_dir: Path,
         transform: Callable[[Image.Image], object],
         sample_mode: str = "random",
+        quality_filter_fundus: Optional["CompositeFilter"] = None,
+        quality_filter_oct: Optional["CompositeFilter"] = None,
     ):
-        self.fundus = _gather_images(fundus_dir)
-        self.oct = _gather_images(oct_dir)
+        self.fundus, rej_f = _gather_images(fundus_dir, quality_filter_fundus)
+        self.oct, rej_o = _gather_images(oct_dir, quality_filter_oct)
         self.transform = transform
         self.sample_mode = sample_mode
+
+        if rej_f > 0 or rej_o > 0:
+            print(f"   Quality filter: rejected {rej_f} fundus, {rej_o} OCT images")
+            print(f"   Using: {len(self.fundus)} fundus, {len(self.oct)} OCT images")
 
     def __len__(self) -> int:
         return max(len(self.fundus), len(self.oct))
@@ -55,6 +89,15 @@ def build_dataloader(
     num_workers: int,
     pin_memory: bool,
     sample_mode: str = "random",
+    quality_filter_fundus: Optional["CompositeFilter"] = None,
+    quality_filter_oct: Optional["CompositeFilter"] = None,
 ) -> DataLoader:
-    dataset = CycleGANDataset(fundus_dir, oct_dir, transform, sample_mode=sample_mode)
+    dataset = CycleGANDataset(
+        fundus_dir,
+        oct_dir,
+        transform,
+        sample_mode=sample_mode,
+        quality_filter_fundus=quality_filter_fundus,
+        quality_filter_oct=quality_filter_oct,
+    )
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=pin_memory)
