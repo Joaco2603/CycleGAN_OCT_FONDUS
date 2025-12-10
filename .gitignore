@@ -48,6 +48,15 @@ checkpoints/
 runs/
 lightning_logs/
 
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+*.dvc.lock
+
 # TensorBoard event files
 events.out.tfevents.*
 tensorboard-*
