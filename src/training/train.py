@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Mapping
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from torch.cuda.amp import GradScaler, autocast
@@ -20,16 +21,39 @@ from .schedulers import build_lr_scheduler
 
 
 @dataclass
-class TrainArtifacts:
-    epoch: int
-    generator_loss: float
-    discriminator_loss: float
+class TrainResult:
+    """Raw training results for metric extraction."""
+    run_name: str
+    start_time: datetime
+    end_time: datetime
+    epochs_completed: int
+    total_epochs: int
+    total_steps: int
+    g_loss_history: List[float]
+    d_loss_history: List[float]
+    checkpoint_path: Optional[str]
+    device: str
+    gpu_name: Optional[str]
+    max_gpu_temp: Optional[float]
+    config_dict: Dict
 
 
-def train(config: TrainingConfig) -> None:
+def train(config: TrainingConfig) -> TrainResult:
+    """Train CycleGAN and return raw results for metric extraction."""
+    start_time = datetime.now()
+    run_name = f"cyclegan_{start_time.strftime('%Y%m%d_%H%M%S')}"
+    
+    # Track losses per epoch
+    g_loss_history: List[float] = []
+    d_loss_history: List[float] = []
+    max_gpu_temp_seen = 0.0
+    last_checkpoint = None
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    gpu_name = None
     if device.type == "cuda":
-        print(f"   GPU: {torch.cuda.get_device_name(0)}")
+        gpu_name = torch.cuda.get_device_name(0)
+        print(f"   GPU: {gpu_name}")
         print(f"   Memoria: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
         temp = get_gpu_temperature()
         if temp is not None:
@@ -131,11 +155,35 @@ def train(config: TrainingConfig) -> None:
         sched_d.step()
         temp_monitor.reset()
         writer.flush()
+        
+        # Track epoch metrics
+        g_loss_history.append(losses_g["total"])
+        d_loss_history.append(losses_d["total"])
+        if temp_monitor.last_temp:
+            max_gpu_temp_seen = max(max_gpu_temp_seen, temp_monitor.last_temp)
+        
         temp_info = f" | GPU: {temp_monitor.last_temp:.0f}°C" if temp_monitor.last_temp else ""
         print(f"Epoch {epoch+1}/{config.training.epochs} — G: {losses_g['total']:.4f}, D: {losses_d['total']:.4f}{temp_info}")
         if (epoch + 1) % config.training.save_interval == 0:
+            last_checkpoint = str(Path(config.paths.weights) / f"cycle_gan_epoch_{epoch+1:03d}.pth")
             _persist_checkpoint(config, epoch, model, opt_g, opt_d, sched_g, sched_d)
     writer.close()
+    
+    return TrainResult(
+        run_name=run_name,
+        start_time=start_time,
+        end_time=datetime.now(),
+        epochs_completed=config.training.epochs,
+        total_epochs=config.training.epochs,
+        total_steps=global_step,
+        g_loss_history=g_loss_history,
+        d_loss_history=d_loss_history,
+        checkpoint_path=last_checkpoint,
+        device=str(device),
+        gpu_name=gpu_name,
+        max_gpu_temp=max_gpu_temp_seen if max_gpu_temp_seen > 0 else None,
+        config_dict=_config_to_dict(config),
+    )
 
 
 def _disc_loss(module, real, fake):
@@ -163,3 +211,19 @@ def _persist_checkpoint(config: TrainingConfig, epoch: int, model: CycleGAN, opt
         "sched_disc": sched_d.state_dict(),
     }
     save_checkpoint(state, Path(config.paths.weights) / f"cycle_gan_epoch_{epoch+1:03d}.pth")
+
+
+def _config_to_dict(config: TrainingConfig) -> Dict:
+    """Flatten config to dict for tracking."""
+    return {
+        "model.blocks": config.model.blocks,
+        "data.image_size": config.data.image_size,
+        "data.augment": config.data.augment,
+        "data.preprocessing": config.data.preprocessing,
+        "loss.lambda_cycle": config.loss.lambda_cycle,
+        "loss.lambda_identity": config.loss.lambda_identity,
+        "optim.lr": config.optim.lr,
+        "optim.batch_size": config.optim.batch_size,
+        "training.epochs": config.training.epochs,
+        "training.amp": config.training.amp,
+    }

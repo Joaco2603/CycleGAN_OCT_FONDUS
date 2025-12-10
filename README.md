@@ -24,7 +24,9 @@ Modular CycleGAN pipeline for unsupervised translation between retinal fundus ph
    ```
 4. Train the model:
    ```powershell
-   python train.py --config config.yaml
+   python train.py --config config.yaml --track
+   or
+   python train.py --config config.yaml --track --experiment mi_experimento
    ```
 5. Generate samples:
    ```powershell
