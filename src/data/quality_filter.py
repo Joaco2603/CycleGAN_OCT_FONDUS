@@ -161,6 +161,136 @@ class LaplacianBlurFilter(BaseQualityFilter):
         return QualityResult(True, "OK", {"laplacian_var": var})
 
 
+class OCTVerticalContentFilter(BaseQualityFilter):
+    """
+    Filtro específico para OCT: detecta imágenes con demasiado espacio negro
+    arriba/abajo. Un buen OCT tiene la retina centrada verticalmente.
+    """
+
+    name = "oct_vertical"
+
+    def __init__(
+        self,
+        max_top_black_ratio: float = 0.35,
+        max_bottom_black_ratio: float = 0.40,
+        black_threshold: int = 15,
+    ):
+        self.max_top_black_ratio = max_top_black_ratio
+        self.max_bottom_black_ratio = max_bottom_black_ratio
+        self.black_threshold = black_threshold
+
+    def check(self, img: Image.Image) -> QualityResult:
+        arr = np.array(img.convert("L"))
+        h, w = arr.shape
+
+        # Analizar distribución vertical del contenido
+        row_brightness = arr.mean(axis=1)  # Brillo promedio por fila
+
+        # Encontrar primera y última fila con contenido significativo
+        content_rows = row_brightness > self.black_threshold
+        if not content_rows.any():
+            return QualityResult(False, "No content detected", {"top_black": 1.0, "bottom_black": 1.0})
+
+        first_content = np.argmax(content_rows)
+        last_content = h - np.argmax(content_rows[::-1]) - 1
+
+        top_black_ratio = first_content / h
+        bottom_black_ratio = (h - last_content - 1) / h
+
+        metrics = {
+            "top_black_ratio": top_black_ratio,
+            "bottom_black_ratio": bottom_black_ratio,
+            "content_height_ratio": (last_content - first_content) / h,
+        }
+
+        if top_black_ratio > self.max_top_black_ratio:
+            return QualityResult(False, f"Too much black on top ({top_black_ratio:.1%})", metrics)
+        if bottom_black_ratio > self.max_bottom_black_ratio:
+            return QualityResult(False, f"Too much black on bottom ({bottom_black_ratio:.1%})", metrics)
+
+        return QualityResult(True, "OK", metrics)
+
+
+class OCTLayerStructureFilter(BaseQualityFilter):
+    """
+    Detecta si el OCT tiene estructura de capas retinianas visible.
+    Un buen OCT muestra bandas horizontales claras (capas de la retina).
+    """
+
+    name = "oct_layers"
+
+    def __init__(self, min_horizontal_gradient: float = 8.0, min_layer_contrast: float = 25.0):
+        self.min_horizontal_gradient = min_horizontal_gradient
+        self.min_layer_contrast = min_layer_contrast
+
+    def check(self, img: Image.Image) -> QualityResult:
+        arr = np.array(img.convert("L")).astype(np.float32)
+        h, w = arr.shape
+
+        # Enfocarse en región central (donde debería estar la retina)
+        y_start, y_end = int(h * 0.15), int(h * 0.85)
+        x_start, x_end = int(w * 0.1), int(w * 0.9)
+        center_region = arr[y_start:y_end, x_start:x_end]
+
+        # Calcular gradiente vertical (detecta transiciones entre capas)
+        vertical_gradient = np.abs(np.diff(center_region, axis=0))
+        mean_v_gradient = vertical_gradient.mean()
+
+        # Calcular perfil horizontal promedio y su variación
+        horizontal_profile = center_region.mean(axis=1)
+        layer_contrast = horizontal_profile.std()
+
+        metrics = {
+            "vertical_gradient": mean_v_gradient,
+            "layer_contrast": layer_contrast,
+        }
+
+        if mean_v_gradient < self.min_horizontal_gradient:
+            return QualityResult(False, f"Weak layer structure (grad={mean_v_gradient:.1f})", metrics)
+
+        if layer_contrast < self.min_layer_contrast:
+            return QualityResult(False, f"Low layer contrast (std={layer_contrast:.1f})", metrics)
+
+        return QualityResult(True, "OK", metrics)
+
+
+class OCTCenteringFilter(BaseQualityFilter):
+    """
+    Verifica que el contenido principal esté centrado en la imagen.
+    OCT bien capturado tiene la fóvea aproximadamente centrada.
+    """
+
+    name = "oct_centering"
+
+    def __init__(self, max_center_offset: float = 0.25, brightness_threshold: int = 30):
+        self.max_center_offset = max_center_offset
+        self.brightness_threshold = brightness_threshold
+
+    def check(self, img: Image.Image) -> QualityResult:
+        arr = np.array(img.convert("L"))
+        h, w = arr.shape
+
+        # Encontrar centro de masa del contenido brillante
+        bright_mask = arr > self.brightness_threshold
+        if bright_mask.sum() < 100:
+            return QualityResult(False, "Insufficient content", {"center_offset_y": 1.0})
+
+        y_coords, x_coords = np.where(bright_mask)
+        center_y = y_coords.mean() / h
+        center_x = x_coords.mean() / w
+
+        # Offset desde el centro ideal (0.5, 0.5)
+        offset_y = abs(center_y - 0.5)
+        offset_x = abs(center_x - 0.5)
+
+        metrics = {"center_offset_y": offset_y, "center_offset_x": offset_x}
+
+        if offset_y > self.max_center_offset:
+            return QualityResult(False, f"Content not centered vertically (offset={offset_y:.2f})", metrics)
+
+        return QualityResult(True, "OK", metrics)
+
+
 class CompositeFilter:
     """Combine multiple filters; image must pass all."""
 
@@ -192,7 +322,20 @@ class CompositeFilter:
         return cls([
             BrightnessFilter(min_mean=10.0, max_mean=245.0),
             ContrastFilter(min_std=15.0),
-            BlackRatioFilter(max_black_ratio=0.80),
+            BlackRatioFilter(max_black_ratio=0.75),
+            OCTVerticalContentFilter(max_top_black_ratio=0.35, max_bottom_black_ratio=0.40),
+        ])
+
+    @classmethod
+    def strict_oct(cls) -> "CompositeFilter":
+        """Strict filter for high-quality OCT only."""
+        return cls([
+            BrightnessFilter(min_mean=15.0, max_mean=240.0),
+            ContrastFilter(min_std=20.0),
+            BlackRatioFilter(max_black_ratio=0.65),
+            OCTVerticalContentFilter(max_top_black_ratio=0.25, max_bottom_black_ratio=0.30),
+            OCTLayerStructureFilter(min_horizontal_gradient=10.0, min_layer_contrast=30.0),
+            OCTCenteringFilter(max_center_offset=0.20),
         ])
 
     @classmethod

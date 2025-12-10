@@ -26,7 +26,7 @@ model:
 
 loss:
   lambda_cycle: 10.0
-  lambda_identity: 0.5
+  lambda_identity: 5.0  # Aumentado: ayuda a preservar colores (0.5 * lambda_cycle)
 
 optim:
   lr: 0.0002
@@ -34,8 +34,8 @@ optim:
   batch_size: 4
 
 training:
-  epochs: 24
-  decay_start: 100
+  epochs: 150  # CycleGAN necesita 100-200 épocas para buenos resultados
+  decay_start: 75  # Empezar decay a mitad del entrenamiento
   amp: true
   sample_interval: 100
   save_interval: 10

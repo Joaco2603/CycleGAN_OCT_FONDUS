@@ -55,9 +55,28 @@ python scripts/filter_quality.py --root dataset/fundus/train --domain fundus --d
 # 5. Filtrar OCT (dry-run primero)
 python scripts/filter_quality.py --root dataset/oct/train --domain oct --dry-run
 
+- Analizar dataset (ver estadísticas antes de filtrar)
+python scripts/analyze_oct_dataset.py --root dataset/oct/train
+
+- Preview de qué se filtraría (dry-run)
+python scripts/filter_quality.py --root dataset/oct/train --domain oct --dry-run
+
+- Filtrado estricto (recomendado para tu caso)
+python scripts/filter_quality.py --root dataset/oct/train --domain oct --strict --dry-run
+
+- Mover imágenes malas a cuarentena
+python scripts/filter_quality.py --root dataset/oct/train --domain oct --strict --quarantine
+
 # 6. Aplicar filtro (mover a cuarentena)
 python scripts/filter_quality.py --root dataset/fundus/train --domain fundus --quarantine
 python scripts/filter_quality.py --root dataset/oct/train --domain oct --quarantine
+
+# 7. Generar resultados
+python generate.py weights/cycle_gan_epoch_040.pth "data/EYE FUNDUS/EYE FUNDUS1/0001_OD_f_1.jpg" --direction fundus_to_oct --output generated/test_results
+
+python generate.py weights/cycle_gan_epoch_040.pth "data/OCT/OCT1/1221_OD_o_2.jpg" --direction oct_to_fundus --output generated/test_results
+
+python generate.py weights/cycle_gan_epoch_040.pth "data/OCT/OCT1/1221_OD_o_2.jpg" "data/OCT/OCT1/1222_OD_o_2.jpg" "data/OCT/OCT1/1223_OD_o_1.jpg" --direction oct_to_fundus --output generated/test_results_oct2fundus
 
 ## Layout
 

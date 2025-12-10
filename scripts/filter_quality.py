@@ -46,7 +46,7 @@ def main():
     if args.domain == "fundus":
         qf = CompositeFilter.strict_fundus() if args.strict else CompositeFilter.default_fundus()
     else:
-        qf = CompositeFilter.default_oct()
+        qf = CompositeFilter.strict_oct() if args.strict else CompositeFilter.default_oct()
 
     print(f"Scanning: {args.root}")
     print(f"Domain: {args.domain}, Strict: {args.strict}")
